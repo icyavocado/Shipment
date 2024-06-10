@@ -211,6 +211,18 @@ sub cancel {
   return $self->_post_request($self->api_url . '/api/shipments/v1/void/cancel/' . $data->{ShipmentIdentificationNumber} . $query, undef, 'delete');
 }
 
+sub track {
+  my ($self, $data) = @_;
+  die 'inquiryNumber is required' if !$data->{Request}->{InquiryNumber};
+  return $self->_post_request(
+    $self->api_url . '/api/track/v1/details/' . $data->{Request}->{InquiryNumber},
+    undef,
+    "get",
+    transactionSrc => "Shipment::UPS::API",
+    transId => 'Shipment::UPS::API-' . time()
+  );
+}
+
 no Moo;
 
 1;

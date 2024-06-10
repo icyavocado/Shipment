@@ -1427,81 +1427,70 @@ This method calls ProcessTrack from the Shipping API
 sub track {
   my ($self) = @_;
 
-  use Shipment::Activity;
-
   if (!$self->tracking_id) {
     $self->error('no tracking id provided');
     return;
   }
 
-  use Shipment::UPS::WSDL::TrackInterfaces::TrackService::TrackPort;
-  my $interface =
-    Shipment::UPS::WSDL::TrackInterfaces::TrackService::TrackPort->new(
-      { proxy_domain => $self->proxy_domain, } );
-
   my $response;
 
   try {
 
-    $Shipment::SOAP::WSDL::Debug = 1 if $self->debug > 1;
-    $response = $interface->ProcessTrack(
-        {
-            Request => {    # Shipment::UPS::WSDL::TrackTypes::RequestType
-                RequestOption => 0,
-            },
-            InquiryNumber  => $self->tracking_id,
-            TrackingOption => "02",
-        },
-        {
-            UsernameToken => {
-                Username => $self->username,
-                Password => $self->password,
-            },
-            ServiceAccessToken => { AccessLicenseNumber => $self->key, },
-        },
+    $response = $self->api->track(
+      {
+        Request => {
+          InquiryNumber  => $self->tracking_id,
+        }
+      }
     );
 
-    $Shipment::SOAP::WSDL::Debug = 0;
     warn "Response\n" . $response if $self->debug > 1;
 
-    $response->can('get_Shipment') or die 'failed to get tracking';
+    my $shipments = $response->{trackResponse}->{shipment};
 
-    for my $activity ( @{ $response->get_Shipment()->get_Package()->get_Activity() } ) {
-      my ($city, $state, $country);
-      if ($activity->get_ActivityLocation && $activity->get_ActivityLocation()->get_Address()) {
-        $city = $activity->get_ActivityLocation()->get_Address()->get_City()->get_value();
-        $state = $activity->get_ActivityLocation()->get_Address()->get_StateProvinceCode()->get_value();
-        $country = $activity->get_ActivityLocation()->get_Address()->get_CountryCode()->get_value();
+    $shipments->[0] or die 'failed to get tracking';
+
+    my $shipment = $shipments->[0];
+
+    my @activities = ();
+    for my $package ( @{ $shipment->{package} } ) {
+      for my $activity ( @{ $package->{activity} } ) {
+
+        my ($city, $state, $country);
+
+        if ($activity->{location} && $activity->{location}->{address}) {
+          $city = $activity->{location}->{address}->{city};
+          $state = $activity->{location}->{address}->{state};
+          $country = $activity->{location}->{address}->{country};
+        }
+
+        if ($self->can('add_activity')) {
+          eval { require Shipment::Activity; };
+          use DateTime::Format::ISO8601;
+
+          $self->add_activity(
+            Shipment::Activity->new(
+              description => $activity->{status}->{description},
+              date => DateTime::Format::ISO8601->parse_datetime($activity->{date} . 'T' . $activity->{time}),
+              location => Shipment::Address->new(
+                city => ($city || ''),
+                state => ($state || ''),
+                country => ($country || '')
+              )
+            )
+          );
+        }
       }
-      $self->add_activity(
-        Shipment::Activity->new(
-          description => $activity->get_Status()->get_Description()->get_value(),
-          date => DateTime::Format::ISO8601->parse_datetime($activity->get_Date()->get_value() . 'T' . $activity->get_Time()->get_value()),
-          location => Shipment::Address->new(
-            city => ($city || ''),
-            state => ($state || ''),
-            country => ($country || ''),
-          ),
-        )
-      );
     }
-    $self->ship_date( DateTime::Format::ISO8601->parse_datetime($response->get_Shipment()->get_PickupDate->get_value()) );
-
+    return 1;
   } catch {
-      warn $_ if $self->debug;
-      try {
-        my $error = join "\n",  map {
-          $_->get_PrimaryErrorCode()->get_Code() . ' - ' . $_->get_PrimaryErrorCode()->get_Description;
-        } @{ $response->get_detail()->get_Errors()->get_ErrorDetail() };
-        warn $error if $self->debug;
-        $self->error( $error );
-      } catch {
-        warn $_ if $self->debug;
-        warn $response->get_faultstring if $self->debug;
-        $self->error( $response->get_faultstring->get_value );
-      };
+    warn $_ if $self->debug;
+    my $error = join "\n",  map {
+      $_->{code} . ' - ' . $_->{message}
+    } @{ $response->{response}->{errors} };
+    warn $error if $self->debug;
+    $self->error( $error );
   };
-
 }
 
 =head1 AUTHOR
