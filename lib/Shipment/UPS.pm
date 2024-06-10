@@ -1262,7 +1262,7 @@ sub cancel {
 
 }
 
-=head2 xav 
+=head2 xav
 
 UPS Address validation
 
@@ -1275,147 +1275,105 @@ request_option defaults to 1
 =cut
 
 sub xav {
-    my ( $self, $request_option ) = @_;
+  my ( $self, $request_option ) = @_;
 
-    use Shipment::UPS::WSDL::XAVInterfaces::XAVService::XAVPort;
-    my $interface =
-      Shipment::UPS::WSDL::XAVInterfaces::XAVService::XAVPort->new(
-        {
-            proxy_domain => $self->proxy_domain,
+  $request_option //= 1;
+
+  my $response;
+  my $success;
+  my $result;
+  my $classification;
+  my @candidates;
+
+  my @to_addresslines = (
+    $self->to_address->address1,
+    $self->to_address->address2,
+    $self->to_address->address3
+  );
+
+  try {
+
+    $response = $self->api->xav(
+      {
+        Request => {
+          RequestOption => '' . $request_option
+        },
+        AddressKeyFormat => {
+          AddressLine        => \@to_addresslines,
+          PoliticalDivision2 => $self->to_address->city,
+          PoliticalDivision1 => $self->to_address->province_code,
+          PostcodePrimaryLow => $self->to_address->postal_code,
+          CountryCode        => $self->to_address->country_code,
         }
-      );
-
-    $request_option //= 1;
-
-    my $response;
-    my $success;
-    my $result;
-    my $classification;
-    my @candidates;
-
-    my @to_addresslines = (
-      $self->to_address->address1,
-      $self->to_address->address2,
-      $self->to_address->address3
+      }
     );
+    warn $response if $self->debug > 1;
 
-    try {
-
-  	$response = $interface->ProcessXAV(
-  	{
-            Request => {
-                RequestOption => $request_option,
-              },
-              AddressKeyFormat => {
-                AddressLine        => \@to_addresslines,
-                PoliticalDivision2 => $self->to_address->city,
-                PoliticalDivision1 => $self->to_address->province_code,
-                PostcodePrimaryLow => $self->to_address->postal_code,
-                CountryCode        => $self->to_address->country_code,
-              }
- 	},
- 	{
-             UsernameToken =>  {
-               Username =>  $self->username,
-               Password =>  $self->password,
-             },
-             ServiceAccessToken =>  {
-               AccessLicenseNumber =>  $self->key,
-             },
-	},
-
-  	);
-	warn $response if $self->debug > 1;
-	
     if ( $request_option =~ m/[23]/ ) {
-        try {
-            my $ac = $response->get_AddressClassification;
-            $classification->{code}        = $ac->get_Code->get_value();
-            $classification->{description} = $ac->get_Description->get_value();
-        }
-        catch {};
+      try {
+        my $ac = $response->{AddressClassification};
+        $classification->{code}        = $ac->{Code};
+        $classification->{description} = $ac->{Description};
+      }
+      catch {};
     }
 
     try {
-        if ( defined( $response->get_ValidAddressIndicator->get_value() ) ) {
-            $result = "valid";
-        }
+      $result = "valid" if defined($response->{ValidAddressIndicator});
     }
     catch {};
 
     try {
-        if ( defined( $response->get_AmbiguousAddressIndicator->get_value() ) )
-        {
-            $result = "invalid";
-        }
-
+      $result = "invalid" if defined( $response->{AmbiguousAddressIndicator} )
     }
     catch {};
 
     try {
-        if ( defined( $response->get_NoCandidatesIndicator->get_value() ) )
-        {
-            $result = "nocandidates";
-        }
-
+      $result = "nocandidates" if defined( $response->{NoCandidatesIndicator} );
     }
     catch {};
 
     if ( $result && $result ne "nocandidates" ) {
 
-        # If we are asking for address classification, canidites will also
-        # include classification results
-        try {
+      # If we are asking for address classification, canidites will also
+      # include classification results
+      try {
 
-            for my $candidate ( @{ $response->get_Candidate() } ) {
-                my %a_hash = (
-                    address1 =>
-                      $candidate->get_AddressKeyFormat()->get_AddressLine()
-                      ->get_value(),
-                    city => $candidate->get_AddressKeyFormat()
-                      ->get_PoliticalDivision2()->get_value(),
-                    province => $candidate->get_AddressKeyFormat()
-                      ->get_PoliticalDivision1()->get_value(),
-                    postal_code => $candidate->get_AddressKeyFormat()
-                      ->get_PostcodePrimaryLow()->get_value() . "-"
-                      . $candidate->get_AddressKeyFormat()
-                      ->get_PostcodeExtendedLow()->get_value(),
-                    country =>
-                      $candidate->get_AddressKeyFormat()->get_CountryCode()
-                      ->get_value(),
-                );
+        for my $candidate ( @{ $response->{Candidate} } ) {
+          my %a_hash = (
+            address1 =>
+            $candidate->{AddressKeyFormat}->{AddressLine},
+            city => $candidate->{AddressKeyFormat}->{PoliticalDivision2},
+            province => $candidate->{AddressKeyFormat}->{PoliticalDivision1},
+            postal_code => $candidate->{AddressKeyFormat}
+            ->{PostcodePrimaryLow} . "-"
+            . $candidate->{AddressKeyFormat}
+            ->{PostcodeExtendedLow},
+            country =>
+            $candidate->{AddressKeyFormat}->{CountryCode},
+          );
 
-                if ( $request_option == 3 ) {
-                    $a_hash{classification}{code} =
-                      $candidate->get_AddressClassification->get_Code
-                      ->get_value();
-                    $a_hash{classification}{description} =
-                      $candidate->get_AddressClassification->get_Description
-                      ->get_value();
-                }
-                push @candidates, \%a_hash;
-            }
-
+          if ( $request_option == 3 ) {
+            $a_hash{classification}{code} =
+            $candidate->{AddressClassification}->{Code};
+            $a_hash{classification}{description} =
+            $candidate->{AddressClassification}->{Description};
+          }
+          push @candidates, \%a_hash;
         }
-        catch { warn $_ };
+
+      }
+      catch { warn $_ };
     }
 
   } catch {
-      warn $_ if $self->debug;
-      try {
-        my $error = join "\n",  map {
-          $_->get_PrimaryErrorCode()->get_Code() . ' - ' . $_->get_PrimaryErrorCode()->get_Description;
-        } @{ $response->get_detail()->get_Errors()->get_ErrorDetail() };
-        warn $error if $self->debug;
-        $self->error( $error );
-      } catch {
-        warn $_ if $self->debug;
-        warn $response->get_faultstring if $self->debug;
-        $self->error( $response->get_faultstring->get_value );
-      };
+    warn $_ if $self->debug;
+    my $error = join "\n",  map { $_->{code} . ' - ' . $_->{message} } @{ $response->{response}->{errors} };
+    warn $error if $self->debug;
+    $self->error( $error );
   };
 
-    return { 'result' => $result, 'candidate' => \@candidates, 'classification' => $classification };
+  return { 'result' => $result, 'candidate' => \@candidates, 'classification' => $classification };
 }
 
 =head2 track

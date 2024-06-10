@@ -211,6 +211,14 @@ sub cancel {
   return $self->_post_request($self->api_url . '/api/shipments/v1/void/cancel/' . $data->{ShipmentIdentificationNumber} . $query, undef, 'delete');
 }
 
+sub xav {
+  my ($self, $data) = @_;
+  die 'requestoption is required' if !$data->{Request}->{RequestOption};
+  return $self->_post_request($self->api_url . '/api/addressvalidation/v2/' . $data->{Request}->{RequestOption}, {
+    XAVRequest => $data
+  });
+}
+
 sub track {
   my ($self, $data) = @_;
   die 'inquiryNumber is required' if !$data->{Request}->{InquiryNumber};
