@@ -1309,9 +1309,10 @@ sub xav {
     );
     warn $response if $self->debug > 1;
 
+
     if ( $request_option =~ m/[23]/ ) {
       try {
-        my $ac = $response->{AddressClassification};
+        my $ac = $response->{XAVResponse}->{AddressClassification};
         $classification->{code}        = $ac->{Code};
         $classification->{description} = $ac->{Description};
       }
@@ -1319,17 +1320,17 @@ sub xav {
     }
 
     try {
-      $result = "valid" if defined($response->{ValidAddressIndicator});
+      $result = "valid" if defined($response->{XAVResponse}->{ValidAddressIndicator});
     }
     catch {};
 
     try {
-      $result = "invalid" if defined( $response->{AmbiguousAddressIndicator} )
+      $result = "invalid" if defined($response->{XAVResponse}->{AmbiguousAddressIndicator})
     }
     catch {};
 
     try {
-      $result = "nocandidates" if defined( $response->{NoCandidatesIndicator} );
+      $result = "nocandidates" if defined($response->{XAVResponse}->{NoCandidatesIndicator});
     }
     catch {};
 
@@ -1339,7 +1340,7 @@ sub xav {
       # include classification results
       try {
 
-        for my $candidate ( @{ $response->{Candidate} } ) {
+        for my $candidate ( @{ $response->{XAVResponse}->{Candidate} } ) {
           my %a_hash = (
             address1 =>
             $candidate->{AddressKeyFormat}->{AddressLine},
