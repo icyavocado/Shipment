@@ -172,8 +172,12 @@ sub _post_request {
         );
       }
 
-      if (!$r->is_success) {
-        die 'Request failed: ' . $r->status_line . ': ' . $r->as_string;
+      if (!$r->is_success && $r->decoded_content) {
+        my $errors = $self->json->decode($r->decoded_content);
+        die join '\n', map { $_->{code} . ' - ' . $_->{message} . "\n" } @{ $errors->{response}->{errors} } if $errors;
+        die 'Request failed: ' . $r->status_line . ': ' . $r->decoded_content;
+      } elsif (!$r->is_success) {
+        die 'Request failed: ' . $r->status_line . ': No decoded content';
       }
 
       return $self->json->decode($r->decoded_content);
