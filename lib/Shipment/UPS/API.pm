@@ -209,7 +209,7 @@ sub ship {
 sub cancel {
   my ($self, $data) = @_;
   die 'ShipmentIdentificationNumber is required' if !$data->{ShipmentIdentificationNumber};
-  my $tracking_number_array = '["' . join('","', @{$data->{TrackingNumber}}) . '"]' if $data->{TrackingNumber} && ref $data->{TrackingNumber} eq 'ARRAY' && scalar @{$data->{TrackingNumber}} > 0;
+  my $tracking_number_array = '[' . join(',', @{$data->{TrackingNumber}}) . ']' if $data->{TrackingNumber} && ref $data->{TrackingNumber} eq 'ARRAY' && scalar @{$data->{TrackingNumber}} > 1;
   my $query = $tracking_number_array ? "?trackingnumber=$tracking_number_array" : '';
   return $self->_post_request($self->api_url . '/api/shipments/v1/void/cancel/' . $data->{ShipmentIdentificationNumber} . $query, undef, 'delete');
 }
