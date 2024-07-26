@@ -263,7 +263,7 @@ $shipment = Shipment::UPS->new(
 );
 
 $shipment->ship( 'ground' );
-is( $shipment->error, '9120080 - Missing bill third party address information.', 'UPS error regarding bill third party address information');
+is( $shipment->error, "9120080 - Missing bill third party address information.\n", 'UPS error regarding bill third party address information');
 
 $to = Shipment::Address->new(
   name => 'RITZ CAMERA CENTERS-1749',

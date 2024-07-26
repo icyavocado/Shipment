@@ -182,9 +182,8 @@ sub _post_request {
 
       return $self->json->decode($r->decoded_content);
     };
-    if ($@) {
-      die 'Request failed: ' . $@;
-    }
+
+    die $@ if $@;
 
     return $response;
 }
