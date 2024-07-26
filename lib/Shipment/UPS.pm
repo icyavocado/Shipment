@@ -127,7 +127,7 @@ has 'preserve_token' => (
       my ($args) = @_;
 
       use File::Slurp qw(write_file read_file);
-      use File::Spec qw(tmpdir);
+      use File::Spec;
       use Try::Tiny;
       my $tmp_dir = File::Spec->tmpdir();
       if ($args->{access_token} && $args->{expires_in}) {
