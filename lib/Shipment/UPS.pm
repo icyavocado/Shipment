@@ -843,7 +843,7 @@ sub ship {
               CountryCode       => $country_code_map{$self->to_address->province_code} || $self->to_address->country_code,
             },
           };
-$shipto->{Address}->{ResidentialAddressIndicator} = "1" if $self->{residential_address};
+  $shipto->{Address}->{ResidentialAddressIndicator} = "1" if $self->{residential_address};
   $shipto->{Phone}{Number} = $self->to_address->phone
      if $self->to_address->phone;
 
